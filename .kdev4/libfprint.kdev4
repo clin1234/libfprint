@@ -1,2 +1,15 @@
+[Buildset]
+BuildItems=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x01\x00\x00\x00\x0b\x00\x00\x00\x00\x01\x00\x00\x00\x12\x00l\x00i\x00b\x00f\x00p\x00r\x00i\x00n\x00t)
+
+[MesonManager]
+Current Build Directory Index=0
+Number of Build Directories=1
+
+[MesonManager][BuildDir 0]
+Additional meson arguments=
+Build Directory Path=/home/shared/libfprint/build
+Meson Generator Backend=ninja
+Meson executable=/home/cl/.local/bin/meson
+
 [Project]
 VersionControlSupport=kdevgit

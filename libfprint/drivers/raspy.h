@@ -218,11 +218,7 @@ maybe erratum?)
  * Else Receieve eigenvalues, Q3=success
  * */
 
-struct _Raspy {
-  const FpDevice *fp;
-};
-
-enum Raspy_ACK_Status {
+typedef enum _R {
   success,
   fail,
   database_full = 4,
@@ -230,6 +226,6 @@ enum Raspy_ACK_Status {
   user_already_exists,
   fingeprint_already_exists,
   timeout
-};
+} Raspy_ACK_Status;
 
 #endif

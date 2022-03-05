@@ -123,7 +123,7 @@ default_drivers = [
     'upekts',
     'goodixmoc',
     'nb1010',
-    'raspy'
+    'raspy',
 
     # SPI
     'elanspi',
