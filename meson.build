@@ -1,12 +1,11 @@
-project('libfprint', [ 'c', 'cpp' ],
-    version: '1.94.3',
-    license: 'LGPLv2.1+',
-    default_options: [
-        'buildtype=debugoptimized',
-        'warning_level=1',
-        'c_std=gnu99',
-    ],
-    meson_version: '>= 0.49.0')
+project(
+  'libfprint',
+  ['c', 'cpp'],
+version : '1.94.3',
+license : 'LGPLv2.1+',
+default_options : ['buildtype=debugoptimized', 'c_std=gnu99', 'warning_level=3'],
+meson_version : '>= 0.49.0'
+)
 
 gnome = import('gnome')
 
@@ -124,6 +123,7 @@ default_drivers = [
     'upekts',
     'goodixmoc',
     'nb1010',
+    'raspy'
 
     # SPI
     'elanspi',

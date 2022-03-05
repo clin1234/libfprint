@@ -19,23 +19,25 @@
 
 #include "raspy.h"
 
+#include "drivers_api.h"
+
 #include <fcntl.h>
 #include <stdint.h>
 
 static void start() {
-  int fd = open ("/dev/tty1", O_RDONLY | O_NONBLOCK);
-
+  // FIXME: assume no more than 10 USB serial devices are present
+  int fd = open("/dev/ttyUSB0", O_RDONLY | O_NONBLOCK);
 }
-
 
 // Naive, but functional
-static uint8_t xor(uint8_t* bytes, unsigned long sz) {
-  uint8_t checksum = 0;
-  for (unsigned long i = 0; i < sz; i++)
-    checksum ^= bytes[i];
-  return checksum;
-}
+static uint8_t xor
+    (uint8_t * bytes, unsigned long sz) {
+      uint8_t checksum = 0;
+      for (unsigned long i = 0; i < sz; i++)
+        checksum ^= bytes[i];
+      return checksum;
+    }
 
-static uint8_t xor_6_bytes(uint8_t* bytes) {
+    static uint8_t xor_6_bytes(uint8_t *bytes) {
   return xor(bytes, 6);
 }
