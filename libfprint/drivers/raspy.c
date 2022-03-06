@@ -28,13 +28,13 @@
 
 #define FP_COMPONENT "raspy"
 
-struct _FpDeviceRaspy {
+struct _FpiDeviceRaspy {
   FpImageDevice par;
 };
 
 static int get_fd_for_usb_serial(void) {
   // FIXME: assume no more than 10 USB serial devices are present
-  char* const tmp;
+  char* const tmp = "";
   int fd = -1;
   for (gushort i = 0; i < 10; i++) {
     int disc = snprintf(tmp, 13, "/dev/ttyUSB%d", i);
@@ -51,12 +51,12 @@ static void delete_user() {
 
 
 
-G_DECLARE_FINAL_TYPE(FpDeviceRaspy, fp_device_raspy, FPI, DEVICE_RASPY,
+G_DECLARE_FINAL_TYPE(FpiDeviceRaspy, fpi_device_raspy, FPI, DEVICE_RASPY,
                      FpImageDevice)
-G_DEFINE_TYPE(FpDeviceRaspy, fp_device_raspy, FP_TYPE_IMAGE_DEVICE)
+G_DEFINE_TYPE(FpiDeviceRaspy, fpi_device_raspy, FP_TYPE_IMAGE_DEVICE)
 
 static void raspy_close(FpImageDevice* dev) {
-  FpDeviceRaspy* self = FPI_DEVICE_RASPY(dev);
+  FpiDeviceRaspy* self = FPI_DEVICE_RASPY(dev);
   GError* err = NULL;
 
   g_usb_device_release_interface(fpi_device_get_usb_device(FP_DEVICE(dev)), 0, 0, &err);
@@ -73,7 +73,7 @@ static void raspy_open(FpImageDevice* dev){
   // BSD-specific function...
   int l = cfsetspeed(&term_attributes, B19200);
 
-  FpDeviceRaspy* self = FPI_DEVICE_RASPY(dev);
+  FpiDeviceRaspy* self = FPI_DEVICE_RASPY(dev);
   GError* err = NULL;
 
   g_usb_device_claim_interface(fpi_device_get_usb_device(FP_DEVICE(dev)), 0, 0, &err);
@@ -110,9 +110,11 @@ static const FpIdEntry id_tab[] = {
   {.vid = 0x10c4, .pid = 0xea60},
 };
 
-static void fpi_device_raspy_init(FpDeviceRaspy *self);
+static void fpi_device_raspy_init(FpiDeviceRaspy *self) {
+
+}
 // static void fpi_device_raspy_finalize(GObject *this);
-static void fpi_device_raspy_class_init(FpDeviceRaspyClass *klass) {
+static void fpi_device_raspy_class_init(FpiDeviceRaspyClass *klass) {
   FpDeviceClass *dev_class = FP_DEVICE_CLASS(klass);
   FpImageDeviceClass *img_class = FP_IMAGE_DEVICE_CLASS(klass);
 
