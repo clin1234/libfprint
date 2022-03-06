@@ -32,18 +32,19 @@ struct _FpiDeviceRaspy {
   FpImageDevice par;
 };
 
-static int get_fd_for_usb_serial(void) {
+static int fd = -1;
+
+static void get_fd_for_usb_serial(void) {
   // FIXME: assume no more than 10 USB serial devices are present
   char* const tmp = "";
-  int fd = -1;
+  int tmp_fd = -1;
   for (gushort i = 0; i < 10; i++) {
     int disc = snprintf(tmp, 13, "/dev/ttyUSB%d", i);
     // TODO: Something bad has occured, but how to report it... eh?
     if (disc > 13){}
-    fd = open(tmp, O_RDWR | O_NONBLOCK);
-    if (fd != -1) break;
+    tmp_fd = open(tmp, O_RDWR | O_NONBLOCK);
+    if (tmp_fd != -1) {fd = tmp_fd; break; }
   }
-  return fd;
 }
 
 static void delete_user() {
@@ -56,6 +57,7 @@ G_DECLARE_FINAL_TYPE(FpiDeviceRaspy, fpi_device_raspy, FPI, DEVICE_RASPY,
 G_DEFINE_TYPE(FpiDeviceRaspy, fpi_device_raspy, FP_TYPE_IMAGE_DEVICE)
 
 static void raspy_close(FpImageDevice* dev) {
+  close(fd);
   FpiDeviceRaspy* self = FPI_DEVICE_RASPY(dev);
   GError* err = NULL;
 
@@ -65,7 +67,7 @@ static void raspy_close(FpImageDevice* dev) {
 }
 
 static void raspy_open(FpImageDevice* dev){
-  int fd = get_fd_for_usb_serial();
+  get_fd_for_usb_serial();
   struct termios term_attributes;
   tcgetattr(fd, &term_attributes);
   term_attributes.c_cflag |= PARODD & PARENB;
