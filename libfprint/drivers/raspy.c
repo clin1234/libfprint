@@ -81,6 +81,18 @@ static void raspy_open(FpImageDevice* dev){
   fpi_image_device_open_complete(dev, err);
 }
 
+static void raspy_activate(FpImageDevice* dev) {
+
+}
+
+static void raspy_deactivate(FpImageDevice* dev) {
+
+}
+
+static void raspy_change_state(FpImageDevice* dev, FpiImageDeviceState state) {
+
+}
+
 // Naive, but functional
 static uint8_t xor(uint8_t * bytes, unsigned long sz) {
   uint8_t checksum = 0;

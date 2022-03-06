@@ -76,10 +76,10 @@
  *	First two commands same as first two of Add fingerprint
  *	3rd command (cmd=0x06):
  *		Send: P1-P3=0
- *		Receieve:
- *			Header: Q1-Q2=193, Q3=sucess, fail, or timeout
+ *		Receive:
+ *			Header: Q1-Q2=193, Q3=success, fail, or timeout
  *			Data packet: 3 bytes of 0s before eigenvalues
- *		Data packet is receieved only when Q3 = success
+ *		Data packet is received only when Q3 = success
  *
  * Delete user (cmd=0x04):
  *  Send: P1,P2 = user ID, P3 = 0
@@ -215,7 +215,7 @@ maybe erratum?)
  * If timeout, Q3=timeout
  * Else Process image
  * If eigenvalue if less, Q3=fail
- * Else Receieve eigenvalues, Q3=success
+ * Else Recieve eigenvalues, Q3=success
  * */
 
 typedef enum _R {
