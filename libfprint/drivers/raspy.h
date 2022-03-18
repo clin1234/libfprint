@@ -218,6 +218,8 @@ maybe erratum?)
  * Else Recieve eigenvalues, Q3=success
  * */
 
+#include <stdint.h>
+
 typedef enum _R {
   success,
   fail,
@@ -227,5 +229,16 @@ typedef enum _R {
   fingeprint_already_exists,
   timeout
 } Raspy_ACK_Status;
+
+/** Response:
+ * @res: Response bytes
+ * @payload: received data, excluding leading and tailing 0xf5, and checksum.
+ */
+typedef struct _res {
+  uint_fast8_t res[3];
+  uint_fast16_t payload_size;
+  uint_fast8_t* payload;
+} Response;
+
 
 #endif

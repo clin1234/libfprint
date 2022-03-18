@@ -25,6 +25,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <termios.h>
+#include <inttypes.h>
 
 #define FP_COMPONENT "raspy"
 
@@ -92,23 +93,57 @@ static void send_command(uint_fast8_t cmd, const uint_fast8_t params[3],
   }
 }
 
-static void read_response(_Bool receiving_header_and_data) {
-  uint_fast8_t eight_byte_data[8];
-  ssize_t tmp = read(fd, eight_byte_data, 8);
+static Response read_response(_Bool receiving_header_and_data) {
+  uint_fast8_t eight[8];
+  ssize_t tmp = read(fd, eight, 8);
   if (tmp == -1)
     fp_warn("Unexpected errno %s: %s", strerrorname_np(errno), strerror(errno));
   // XXX: assume 8 bytes are fully read
   //else if (tmp < 8) {}
-  if (eight_byte_data[6] != xor_6_bytes(eight_byte_data))
-    fp_warn("Received incorrect XOR checksum: expected %d, got %d", xor_6_bytes(eight_byte_data), eight_byte_data[6]);
-  if (receiving_header_and_data) {
 
+  if (eight[0] != 0xf5 || eight[7] != 0xf5)
+      fp_warn("First or last byte of header not 0xf5: got %x and %x", eight[0], eight[7]);
+  if (eight[6] != xor_6_bytes(eight))
+    fp_warn("Received incorrect XOR checksum: expected %x, got %x", xor_6_bytes(eight), eight[6]);
+
+  // Members of a struct, e.g. res, that aren't explicitly initialized get
+  // zero-initialized (members of type int set to 0, pointer members set to NULL)
+  Response res = {.res = {eight[2], eight[3], eight[4]}};
+  if (receiving_header_and_data) {
+    res.payload_size = eight[2] << 8 | eight[3];
+    // +3 accounts for auxiliary bytes surrounding data of interest: first and last bytes of 0xf5, and XOR checksum.
+    size_t tmp_buf_len = sizeof(uint_fast8_t)*(res.payload_size+3);
+    // Temporary buffer for sanity checking below
+    uint_fast8_t* tmp_buf = malloc(tmp_buf_len);
+    ssize_t bytes_read = read(fd, tmp_buf, tmp_buf_len);
+    if (bytes_read == -1)
+      fp_warn("Unexpected errno %s: %s", strerrorname_np(errno), strerror(errno));
+    else if (bytes_read < tmp_buf_len)
+      fp_warn("Expected to read %zu bytes: instead got %zu  bytes", tmp_buf_len, bytes_read);
+
+    if (tmp_buf[0] != 0xf5 || tmp_buf[7] != 0xf5)
+      fp_warn("First or last byte of data not 0xf5: got %x and %x", tmp_buf[0], tmp_buf[7]);
+    if (tmp_buf[tmp_buf_len-2] != xor(tmp_buf, tmp_buf_len-2))
+      fp_warn("Received incorrect XOR checksum: expected %x, got %x", xor(tmp_buf, tmp_buf_len-2), tmp_buf[tmp_buf_len-2]);
+    // Strip out above 3 bytes before copying real data
+    res.payload_size = tmp_buf_len-sizeof(uint_fast8_t)*3;
+    res.payload = malloc(res.payload_size);
+    memmove(res.payload, tmp_buf+1, res.payload_size);
+    free(tmp_buf);
+    tmp_buf = NULL;
   }
+  return res;
 }
 
 static void delete_user(uint_fast16_t user) {
   const uint_fast8_t params[] = {user >> 8, user & 0xff, 0};
   send_command(4, params, 0);
+  Response res = read_response(0);
+  switch (res.res[2]) {
+  case fail: fp_warn("Deleting user ID %"PRIuFAST16" failed.", user);
+  // Fallthrough desirable
+  case success: return;
+  }
 }
 
 G_DECLARE_FINAL_TYPE(FpiDeviceRaspy, fpi_device_raspy, FPI, DEVICE_RASPY,
@@ -152,19 +187,21 @@ static void raspy_deactivate(FpImageDevice *dev) {}
 
 static void raspy_change_state(FpImageDevice *dev, FpiImageDeviceState state) {}
 
-static uint_fast8_t query_timeout(void) {}
+static uint_fast8_t query_timeout(void) {
+
+}
 
 // Product and vendor ID of bridge controller
 static const FpIdEntry id_tab[] = {
     {.vid = 0x10c4, .pid = 0xea60},
 };
 
-const struct _something {
+/*const struct _something {
   _Bool sends_variable_bytes;
   uint_fast8_t command_id;
   void (*func)();
 } list_of_funcs[] = {
-    {.func = delete_user, .sends_variable_bytes = 0, .command_id = 4}};
+    {.func = delete_user, .sends_variable_bytes = 0, .command_id = 4}};*/
 
 static void fpi_device_raspy_init(FpiDeviceRaspy *self) {
   fp_dbg("Raspy initialized");
