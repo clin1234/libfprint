@@ -118,7 +118,7 @@
  *	Send: P1-P3=0
  *	Receieve:
  *		Header: Q1,Q2= 9800 (image length), Q3 = success, fail, or
-timeout
+timeouts
 		Data packet: data is image
  *
  * In DSP module, the pixels of fingerprint image are 280*280, every pixel is

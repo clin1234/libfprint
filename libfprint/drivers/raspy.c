@@ -33,8 +33,6 @@ struct _FpiDeviceRaspy {
   FpImageDevice par;
 };
 
-enum Permission { One = 1, Two, Three };
-
 static int fd = -1;
 
 static void get_fd_for_usb_serial(void) {
@@ -135,6 +133,17 @@ static Response read_response(_Bool receiving_header_and_data) {
   return res;
 }
 
+static uint_fast8_t query_timeout(void) {
+  const uint_fast8_t params[] = {0,0,1};
+  send_command(0x0b, params, 0);
+  Response res = read_response(0);
+  switch (res.res[2]) {
+  case fail: fp_warn("Querying timeout failed.");
+  // Fallthrough desirable
+  case success: return res.res[1];
+  }
+}
+
 static void delete_user(uint_fast16_t user) {
   const uint_fast8_t params[] = {user >> 8, user & 0xff, 0};
   send_command(4, params, 0);
@@ -144,6 +153,190 @@ static void delete_user(uint_fast16_t user) {
   // Fallthrough desirable
   case success: return;
   }
+}
+
+static void delete_all_users(gushort* per) {
+  /* Since per is a pointer, it can be null.
+   * If null, delete all users, otherwise deference pointer
+   * to delete users having permission level 1,2,3. */
+  if (per) g_assert(*per > 0 && *per < 4);
+  const uint_fast8_t params[] = {0, 0, !per ? 0 : *per};
+  send_command(5, params, 0);
+  Response res = read_response(0);
+  switch (res.res[2]) {
+  case fail:
+    if (per)
+      fp_warn("Deleting users having level %u failed.", *per);
+    else fp_warn("Deleting all users failed");
+  // Fallthrough desirable
+  case success: return;
+  }
+}
+
+// Count number of fingerprints?
+static uint_fast16_t number_of_users(_Bool count_fingerprints) {
+  const uint_fast8_t params[] = {0, 0, count_fingerprints ? 0xff : 0};
+  send_command(9, params, 0);
+  Response res = read_response(0);
+  switch (res.res[2]) {
+  case fail:
+    fp_warn("Finding number of users failed");
+    // Reasonable assumption: not that many users registred in sensor
+    return UINT_FAST16_MAX;
+  // Fallthrough desirable
+  case 0xff:
+  case success: return res.res[0] << 8 | res.res[1];
+  }
+}
+
+static _Bool compare_1_to_1(uint_fast16_t user) {
+  const uint_fast8_t params[] = {user >> 8, user & 0xff, 0};
+  send_command(0x0b, params, 0);
+
+  Response res = read_response(0);
+  switch (res.res[2]) {
+  case timeout: fp_warn("Timeout reached for fingerprint capture");
+  // Fallthrough desirable
+  case fail: return 0;
+  case success: return 1;
+  }
+}
+
+static uint_fast16_t compare_1_to_N(void) {
+  const uint_fast8_t params[] = {0};
+  send_command(0x0c, params, 0);
+
+  Response res = read_response(0);
+  uint_fast16_t tmp;
+  switch (res.res[2]) {
+  // Fallthrough desirable
+  case timeout: fp_warn("Timeout reached for fingerprint capture");
+  case no_user: return UINT_FAST16_MAX;
+  default:
+    tmp = res.res[0] << 8 | res.res[1];
+    return tmp;
+  }
+}
+
+static Permission* query_permission(uint_fast16_t user) {
+  const uint_fast8_t params[] = {user >> 8, user & 0xff, 0};
+  send_command(0x0a, params, 0);
+  Response res = read_response(0);
+
+  Permission* p = malloc(sizeof(Permission));
+  switch (res.res[2]) {
+  case no_user: return NULL;
+  default: *p = res.res[2]; return p;
+  }
+}
+
+static gushort query_comparison_level(void) {
+  const uint_fast8_t params[] = {0,0,1};
+  send_command(0x28, params, 0);
+
+  Response res = read_response(0);
+  return res.res[1];
+}
+
+static void set_comparison_level(gushort new_lvl) {
+  g_assert(new_lvl >= 0 && new_lvl < 10);
+  const uint_fast8_t params[] = {0,new_lvl,0};
+  send_command(0x28, params, 0);
+
+  Response res = read_response(0);
+  switch(res.res[2]) {
+  case fail: fp_warn("Setting comparison level from %u to %u failed", res.res[1], new_lvl);
+  }
+}
+
+static Response get_fingerprint_image(void) {
+  const uint_fast8_t params[] = {0};
+  send_command(0x28, params, 0);
+
+  Response res = read_response(1);
+  switch(res.res[2]) {
+  case fail: fp_warn("Getting image failed"); break;
+  case timeout: fp_warn("Timeout reached for getting fingerprint image"); break;
+  case success:
+    g_assert(res.payload_size == 9800);
+  }
+
+  return res;
+}
+
+static Response get_fingerprint_image_upload_eighenvals(void) {
+  const uint_fast8_t params[] = {0};
+  send_command(0x23, params, 0);
+
+  Response res = read_response(1);
+  switch(res.res[2]) {
+  case fail: fp_warn("Getting image failed"); break;
+  case timeout: fp_warn("Timeout reached for getting fingerprint image"); break;
+  case success:
+    g_assert(res.payload_size == 9800);
+  }
+
+  return res;
+}
+
+static Raspy_ACK_Status add_fingerprint(uint_fast16_t user, gushort permiss) {
+  g_assert(permiss >= 0 && permiss < 4);
+  const uint_fast8_t params[] = {user >> 8, user & 0xff, permiss};
+
+  for (gushort i = 1; i < 4; i++) {
+    send_command(i, params, 0);
+    Response res = read_response(0);
+    if (res.res[2] != success) return res.res[2];
+  }
+  return success;
+}
+
+static uint_fast8_t* add_fingerprint_and_get_eigenvals(uint_fast16_t user, gushort perms) {
+  g_assert(perms >= 0 && perms < 4);
+  const uint_fast8_t params[] = {user >> 8, user & 0xff, perms};
+  Response res;
+  for (gushort i = 1; i < 3; i++) {
+    send_command(i, params, 0);
+    res = read_response(0);
+    if (res.res[2] != success) return NULL;
+  }
+  send_command(6, (uint_fast8_t[]){0,0,0}, 0);
+  g_assert(res.payload_size == 193);
+  static uint_fast8_t eigenvals[193];
+  switch (res.res[2])
+    {
+    case success:
+      memmove(eigenvals, res.payload+3, 193*sizeof(uint_fast8_t));
+      return eigenvals;
+    // Fallthrough intentional
+    case fail:
+      fp_warn("Getting eigenvalues for user %"PRIuFAST16" with permission level %u failed", user, perms);
+      return NULL;
+    case timeout:
+      fp_warn("Fingerprint timeout for user %"PRIuFAST16" with permission level %u failed", user, perms);
+      return NULL;
+    }
+}
+
+static _Bool duplicates_allowed(void) {
+  const uint_fast8_t params[3] = {0,0,1};
+  send_command(0x2d, params, 0);
+  Response res = read_response(0);
+  return res.res[1];
+}
+
+static Raspy_ACK_Status set_duplication_mode(_Bool on) {
+  const uint_fast8_t params[3] = {0,on,0};
+  send_command(0x2d, params, 0);
+  Response res = read_response(0);
+  return res.res[1];
+}
+
+static Response query_all_users(void) {
+  const uint_fast8_t params[3] = {0};
+  send_command(0x2e, params, 0);
+  Response res = read_response(1);
+  //return res.res[1];
 }
 
 G_DECLARE_FINAL_TYPE(FpiDeviceRaspy, fpi_device_raspy, FPI, DEVICE_RASPY,
@@ -179,17 +372,11 @@ static void raspy_open(FpImageDevice *dev) {
   fpi_image_device_open_complete(dev, err);
 }
 
-static void add_fingerprint(void) {}
-
 static void raspy_activate(FpImageDevice *dev) {}
 
 static void raspy_deactivate(FpImageDevice *dev) {}
 
 static void raspy_change_state(FpImageDevice *dev, FpiImageDeviceState state) {}
-
-static uint_fast8_t query_timeout(void) {
-
-}
 
 // Product and vendor ID of bridge controller
 static const FpIdEntry id_tab[] = {
