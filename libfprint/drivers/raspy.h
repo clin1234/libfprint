@@ -156,7 +156,7 @@ maybe erratum?)
  * Upload eigenvalues from DSP (cmd=0x31):
  *	Send: P1-P2=user ID, P3=0
  *	Receieve:
- *		Header: Q1-Q2=192, Q3=success, fail, no user
+ *		Header: Q1-Q2=193, Q3=success, fail, no user
  *		Data packet: first 2 bytes are user ID, followed by permission,
  *			followed by eigenvalues
  *
@@ -239,6 +239,16 @@ typedef struct _res {
   uint_fast16_t payload_size;
   uint_fast8_t* payload;
 } Response;
+
+
+typedef uint_fast8_t Eigenvalues[193];
+typedef uint_fast8_t Image[140][70];
+
+typedef struct {
+  uint_fast16_t id;
+  unsigned short permission;
+  Eigenvalues* eigenvals;
+} User;
 
 
 #endif

@@ -37,11 +37,11 @@ static int fd = -1;
 
 static void get_fd_for_usb_serial(void) {
   // FIXME: assume no more than 10 USB serial devices are present
-  char *tmp;
+  char *tmp = NULL;
   int tmp_fd = -1;
   for (gushort i = 0; i < 10; i++) {
     int disc = snprintf(tmp, 13, "/dev/ttyUSB%d", i);
-    // TODO: Something bad has occured, but how to report it... eh?
+    // TODO: Something bad has occurred, but how to report it... eh?
     if (disc > 13) {
     }
     tmp_fd = open(tmp, O_RDWR | O_NONBLOCK);
@@ -64,12 +64,12 @@ static uint8_t xor
       return checksum;
     }
 
-    static uint8_t xor_6_bytes(uint8_t *bytes) {
+static uint8_t xor_6_bytes(uint8_t *bytes) {
   return xor(bytes, 6);
 }
 
 static void send_command(uint_fast8_t cmd, const uint_fast8_t params[3],
-                         _Bool sending_header_and_data) {
+                         uint_fast8_t* variable_data) {
   uint_fast8_t eight_byte_data[8] = {0xf5, 0, 0, 0, 0, 0, 0, 0xf5};
   eight_byte_data[1] = cmd;
   for (int i = 0; i < 3; i++)
@@ -81,8 +81,7 @@ static void send_command(uint_fast8_t cmd, const uint_fast8_t params[3],
     fp_warn("Unexpected errno %s: %s", strerrorname_np(errno), strerror(errno));
   }
 
-  if (sending_header_and_data) {
-    uint_fast8_t *variable_data = NULL;
+  if (variable_data) {
     tmp = write(fd, variable_data, sizeof(*variable_data));
     if (tmp == -1) {
       fp_warn("Unexpected errno %s: %s", strerrorname_np(errno),
@@ -135,13 +134,16 @@ static Response read_response(_Bool receiving_header_and_data) {
 
 static uint_fast8_t query_timeout(void) {
   const uint_fast8_t params[] = {0,0,1};
-  send_command(0x0b, params, 0);
+  send_command(0x0b, params, NULL);
   Response res = read_response(0);
-  switch (res.res[2]) {
-  case fail: fp_warn("Querying timeout failed.");
-  // Fallthrough desirable
-  case success: return res.res[1];
-  }
+  return res.res[1];
+}
+
+static Raspy_ACK_Status set_timeout(uint_fast8_t timeout) {
+  const uint_fast8_t params[] = {0,timeout,0};
+  send_command(0x0b, params, NULL);
+  Response res = read_response(0);
+  return res.res[2];
 }
 
 static void delete_user(uint_fast16_t user) {
@@ -179,13 +181,14 @@ static uint_fast16_t number_of_users(_Bool count_fingerprints) {
   send_command(9, params, 0);
   Response res = read_response(0);
   switch (res.res[2]) {
-  case fail:
-    fp_warn("Finding number of users failed");
-    // Reasonable assumption: not that many users registred in sensor
-    return UINT_FAST16_MAX;
   // Fallthrough desirable
   case 0xff:
   case success: return res.res[0] << 8 | res.res[1];
+  case fail:
+    fp_warn("Finding number of users failed");
+  default:
+    // Reasonable assumption: not that many users registered in sensor
+    return UINT_FAST16_MAX;
   }
 }
 
@@ -195,10 +198,11 @@ static _Bool compare_1_to_1(uint_fast16_t user) {
 
   Response res = read_response(0);
   switch (res.res[2]) {
+  case success: return 1;
   case timeout: fp_warn("Timeout reached for fingerprint capture");
   // Fallthrough desirable
-  case fail: return 0;
-  case success: return 1;
+  case fail:;
+  default: return 0;
   }
 }
 
@@ -218,16 +222,11 @@ static uint_fast16_t compare_1_to_N(void) {
   }
 }
 
-static Permission* query_permission(uint_fast16_t user) {
+static gushort query_permission(uint_fast16_t user) {
   const uint_fast8_t params[] = {user >> 8, user & 0xff, 0};
-  send_command(0x0a, params, 0);
+  send_command(0x0a, params, NULL);
   Response res = read_response(0);
-
-  Permission* p = malloc(sizeof(Permission));
-  switch (res.res[2]) {
-  case no_user: return NULL;
-  default: *p = res.res[2]; return p;
-  }
+  return res.res[2] == no_user ? G_MAXUSHORT : res.res[2];
 }
 
 static gushort query_comparison_level(void) {
@@ -249,34 +248,39 @@ static void set_comparison_level(gushort new_lvl) {
   }
 }
 
-static Response get_fingerprint_image(void) {
-  const uint_fast8_t params[] = {0};
-  send_command(0x28, params, 0);
+
+static Image* get_fingerprint_image(void) {
+  const uint_fast8_t params[] = {0,0,0};
+  send_command(0x24, params, 0);
 
   Response res = read_response(1);
+  Image* i = NULL;
   switch(res.res[2]) {
   case fail: fp_warn("Getting image failed"); break;
   case timeout: fp_warn("Timeout reached for getting fingerprint image"); break;
   case success:
     g_assert(res.payload_size == 9800);
+    i = memcpy(i, res.payload, sizeof *i);
   }
 
-  return res;
+  return i;
 }
 
-static Response get_fingerprint_image_upload_eighenvals(void) {
-  const uint_fast8_t params[] = {0};
+static Eigenvalues* get_fingerprint_image_upload_eighenvals(void) {
+  const uint_fast8_t params[] = {0,0,0};
   send_command(0x23, params, 0);
 
   Response res = read_response(1);
+  Eigenvalues* e = NULL;
   switch(res.res[2]) {
   case fail: fp_warn("Getting image failed"); break;
   case timeout: fp_warn("Timeout reached for getting fingerprint image"); break;
   case success:
-    g_assert(res.payload_size == 9800);
+    g_assert(res.payload_size == 193);
+    memmove(e, res.payload+3, sizeof *e);
   }
 
-  return res;
+  return e;
 }
 
 static Raspy_ACK_Status add_fingerprint(uint_fast16_t user, gushort permiss) {
@@ -315,6 +319,7 @@ static uint_fast8_t* add_fingerprint_and_get_eigenvals(uint_fast16_t user, gusho
     case timeout:
       fp_warn("Fingerprint timeout for user %"PRIuFAST16" with permission level %u failed", user, perms);
       return NULL;
+    default: return NULL;
     }
 }
 
@@ -332,11 +337,89 @@ static Raspy_ACK_Status set_duplication_mode(_Bool on) {
   return res.res[1];
 }
 
-static Response query_all_users(void) {
+static User* query_all_users(void) {
   const uint_fast8_t params[3] = {0};
-  send_command(0x2e, params, 0);
-  Response res = read_response(1);
-  //return res.res[1];
+  send_command(0x2b, params, NULL);
+  Response r = read_response(1);
+  uint_fast16_t max_uid;
+  User* u = NULL;
+  switch (r.res[2])
+    {
+    case fail:
+      fp_warn("Querying info for all users failed");
+      break;
+    case success:
+      max_uid = r.payload[0] << 8 | r.payload[1];
+      g_assert(r.payload_size == 3*max_uid+2);
+      malloc(max_uid*sizeof *u);
+      for (uint_fast16_t i = 0; i < max_uid; i++) {
+        u[i].id = r.payload[3*i] << 8 | r.payload[3*i+1];
+        u[i].permission = r.payload[3*i+2];
+        u[i].eigenvals = NULL;
+      }
+    }
+  return u;
+}
+
+static Raspy_ACK_Status download_evs_and_compare_with_fingerprint(Eigenvalues* e) {
+  const uint_fast8_t pars[] = {0, 193, 0};
+  uint_fast8_t tmp[196] = {0};
+  memcpy(tmp+3*sizeof pars[0], e, sizeof *e);
+  send_command(0x44, pars, tmp);
+  Response r = read_response(0);
+  return r.res[2];
+}
+
+static _Bool download_evs_and_compare_1_to_1(uint_fast16_t user, Eigenvalues* e) {
+  const uint_fast8_t pars[] = {0, 193, 0};
+  uint_fast8_t tmp[196] = {user >> 8, user & 0xff};
+  memcpy(tmp+3*sizeof(uint_fast8_t), e, sizeof *e);
+  send_command(0x42, pars, tmp);
+  Response r = read_response(0);
+  return r.res[2] == success ? 1 : 0;
+}
+
+static User* download_evs_and_compare_1_to_n(Eigenvalues* e) {
+  const uint_fast8_t pars[] = {0, 193, 0};
+  uint_fast8_t tmp[196] = {0};
+  memcpy(tmp+3*sizeof(uint_fast8_t), e, sizeof *e);
+  send_command(0x43, pars, tmp);
+  Response r = read_response(0);
+  User* u = NULL;
+  u->eigenvals = NULL;
+  if (r.res[2] != no_user) {
+    u->id = r.res[0] << 8 | r.res[1];
+    u->permission = r.res[2];
+  }
+  return u;
+}
+
+static _Bool downloads_evs_and_save_uid(User* u) {
+  const uint_fast8_t pars[] = {0, 196, 0};
+  uint_fast8_t tmp[pars[2]];
+  g_assert(u->permission >= 0 && u->permission < 4);
+  tmp[0] = u->id >> 8; tmp[1] = u->id & 0xff;
+  tmp[2] = u->permission; memcpy(tmp+3, u->eigenvals, sizeof *u->eigenvals);
+  send_command(0x41, pars, tmp);
+  Response r = read_response(0);
+  return r.res[2] == success ? 1 : 0;
+}
+
+static User* upload_evs(uint_fast16_t user) {
+  const uint_fast8_t pars[] = {user >> 8, user & 0xff, 0};
+  send_command(0x31, pars, NULL);
+  Response r = read_response(1);
+  User* u = NULL;
+  switch (r.res[2]) {
+  case fail: fp_warn("Uploading eigenvalues for user %"PRIxFAST16" failed.", user); break;
+  case no_user: fp_warn("User %"PRIxFAST16" doesn't exist", user); break;
+  case success:
+    g_assert(193 == r.payload_size);
+    u->id = r.payload[0] << 8 | r.payload[1];
+    u->permission = r.payload[2];
+    memmove(u->eigenvals, r.payload+3, 193*sizeof(uint_fast8_t));
+  }
+  return u;
 }
 
 G_DECLARE_FINAL_TYPE(FpiDeviceRaspy, fpi_device_raspy, FPI, DEVICE_RASPY,
@@ -360,9 +443,12 @@ static void raspy_open(FpImageDevice *dev) {
   tcgetattr(fd, &term_attributes);
   term_attributes.c_cflag |= PARODD & PARENB;
   int tmp = tcsetattr(fd, 0, &term_attributes);
+  if (tmp == -1)
+    fp_warn("Unexpected errno %s: %s", strerrorname_np(errno), strerror(errno));
   // BSD-specific function...
-  int l = cfsetspeed(&term_attributes, B19200);
-
+  tmp = cfsetspeed(&term_attributes, B19200);
+  if (tmp == -1)
+    fp_warn("Unexpected errno %s: %s", strerrorname_np(errno), strerror(errno));
   FpiDeviceRaspy *self = FPI_DEVICE_RASPY(dev);
   GError *err = NULL;
 
