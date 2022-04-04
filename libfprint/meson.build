@@ -17,6 +17,7 @@ libfprint_private_sources = [
     'fpi-ssm.c',
     'fpi-usb-transfer.c',
     'fpi-spi-transfer.c',
+    'fpi-uart-transfer.c',
 ]
 
 libfprint_public_headers = [
@@ -42,6 +43,7 @@ libfprint_private_headers = [
     'fpi-print.h',
     'fpi-usb-transfer.h',
     'fpi-spi-transfer.h',
+    'fpi-uart-transfer.h',
     'fpi-ssm.h',
 ]
 
