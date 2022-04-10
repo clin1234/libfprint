@@ -23,3 +23,75 @@
 #include "fpi-device.h"
 
 G_BEGIN_DECLS
+
+typedef struct _FpiUartTransfer FpiUartTransfer;
+typedef struct _FpiSsm         FpiSsm;
+
+typedef void (*FpiUartTransferCallback)(FpiUartTransfer *transfer,
+                                       FpDevice       *dev,
+                                       gpointer        user_data,
+                                       GError         *error);
+
+struct _FpiUartTransfer
+{
+  /*< public >*/
+  FpDevice *device;
+
+  FpiSsm   *ssm;
+
+  gssize    length_wr;
+  gssize    length_rd;
+
+  guchar   *buffer_wr;
+  guchar   *buffer_rd;
+
+  /*< private >*/
+  guint ref_count;
+
+  int   uartdev_fd;
+
+  /* Callbacks */
+  gpointer               user_data;
+  FpiUartTransferCallback callback;
+
+  /* Data free function */
+  GDestroyNotify free_buffer_wr;
+  GDestroyNotify free_buffer_rd;
+};
+
+GType              fpi_uart_transfer_get_type (void) G_GNUC_CONST;
+FpiUartTransfer     *fpi_uart_transfer_new (FpDevice *device,
+                                          int       uartdev_fd);
+FpiUartTransfer     *fpi_uart_transfer_ref (FpiUartTransfer *self);
+void               fpi_uart_transfer_unref (FpiUartTransfer *self);
+
+void               fpi_uart_transfer_write (FpiUartTransfer *transfer,
+                                           gsize           length);
+
+FP_GNUC_ACCESS (read_only, 3, 4)
+void               fpi_uart_transfer_write_full (FpiUartTransfer *transfer,
+                                                guint8         *buffer,
+                                                gsize           length,
+                                                GDestroyNotify  free_func);
+
+void               fpi_uart_transfer_read (FpiUartTransfer *transfer,
+                                          gsize           length);
+
+FP_GNUC_ACCESS (write_only, 3, 4)
+void               fpi_uart_transfer_read_full (FpiUartTransfer *transfer,
+                                               guint8         *buffer,
+                                               gsize           length,
+                                               GDestroyNotify  free_func);
+
+void               fpi_uart_transfer_submit (FpiUartTransfer        *transfer,
+                                            GCancellable          *cancellable,
+                                            FpiUartTransferCallback callback,
+                                            gpointer               user_data);
+
+gboolean           fpi_uart_transfer_submit_sync (FpiUartTransfer *transfer,
+                                                 GError        **error);
+
+
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (FpiUartTransfer, fpi_uart_transfer_unref)
+
+G_END_DECLS
