@@ -1,3 +1,5 @@
 *.o
 *.swp
 _build
+.DS_Store
+[Dd]esktop.ini
