@@ -2,3 +2,5 @@
 *.swp
 _build
 __pycache__
+.DS_Store
+[Dd]esktop.ini
