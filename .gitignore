@@ -3,3 +3,4 @@
 _build
 .DS_Store
 [Dd]esktop.ini
+.vscode/c_cpp_properties.json
