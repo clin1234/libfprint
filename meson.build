@@ -10,6 +10,7 @@ meson_version : '>= 0.49.0'
 gnome = import('gnome')
 
 libfprint_conf = configuration_data()
+libfprint_conf.set_quoted('LIBFPRINT_VERSION', meson.project_version())
 
 cc = meson.get_compiler('c')
 cpp = meson.get_compiler('cpp')
