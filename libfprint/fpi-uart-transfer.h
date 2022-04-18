@@ -68,7 +68,7 @@ void               fpi_uart_transfer_unref (FpiUartTransfer *self);
 void               fpi_uart_transfer_write (FpiUartTransfer *transfer,
                                            gsize           length);
 
-FP_GNUC_ACCESS (read_only, 3, 4)
+FP_GNUC_ACCESS (read_only, 2, 3)
 void               fpi_uart_transfer_write_full (FpiUartTransfer *transfer,
                                                 guint8         *buffer,
                                                 gsize           length,
@@ -77,7 +77,7 @@ void               fpi_uart_transfer_write_full (FpiUartTransfer *transfer,
 void               fpi_uart_transfer_read (FpiUartTransfer *transfer,
                                           gsize           length);
 
-FP_GNUC_ACCESS (write_only, 3, 4)
+FP_GNUC_ACCESS (write_only, 2, 3)
 void               fpi_uart_transfer_read_full (FpiUartTransfer *transfer,
                                                guint8         *buffer,
                                                gsize           length,

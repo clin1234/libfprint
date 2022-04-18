@@ -18,8 +18,8 @@
  */
 
 #include "raspy.h"
-
 #include "drivers_api.h"
+#include "fpi-uart-transfer.h"
 
 #include <fcntl.h>
 #include <inttypes.h>
@@ -29,17 +29,23 @@
 
 #define FP_COMPONENT "raspy"
 
+#include "fpi-log.h"
+
+// Struct needed for the G_DECLARE_FINAL_TYPE, which is included in other source files of the bundled drivers
 struct _FpiDeviceRaspy {
   FpImageDevice par;
 };
 
 static int fd = -1;
 
+/* The scanner connects via the cp2x02 USB serial driver on Linux,
+so this function does the heavy-lifting */
 static void get_fd_for_usb_serial(void) {
   // FIXME: assume no more than 10 USB serial devices are present
-  char *tmp = NULL;
+  char *tmp;
   int tmp_fd = -1;
   for (gushort i = 0; i < 10; i++) {
+  	// 13 is the length of the final string, including '\0'
     int disc = snprintf(tmp, 13, "/dev/ttyUSB%d", i);
     // TODO: Something bad has occurred, but how to report it... eh?
     if (disc > 13) {
@@ -67,6 +73,8 @@ static uint8_t xor(uint8_t * bytes, unsigned long sz) {
   return xor(bytes, 6);
 }
 
+/* Handler for sending the varying combinations of paramaters (up to 3) ,
+and an optional parameter containing variable-length data */
 static void send_command(uint_fast8_t cmd, const uint_fast8_t params[3],
                          uint_fast8_t *variable_data) {
   uint_fast8_t eight_byte_data[8] = {0xf5, 0, 0, 0, 0, 0, 0, 0xf5};
@@ -80,6 +88,7 @@ static void send_command(uint_fast8_t cmd, const uint_fast8_t params[3],
     fp_warn("Unexpected errno %s: %s", strerrorname_np(errno), strerror(errno));
   }
 
+	// NULL is falsy, hence specifying the parameter itself is sufficient
   if (variable_data) {
     tmp = write(fd, variable_data, sizeof(*variable_data));
     if (tmp == -1) {
@@ -89,6 +98,8 @@ static void send_command(uint_fast8_t cmd, const uint_fast8_t params[3],
   }
 }
 
+/* Handler for receiving the the scanner's response data, with a bool parameter
+indicating whether variable-length data will be receieved */
 static Response read_response(_Bool receiving_header_and_data) {
   uint_fast8_t eight[8];
   ssize_t tmp = read(fd, eight, 8);
@@ -139,6 +150,8 @@ static Response read_response(_Bool receiving_header_and_data) {
   return res;
 }
 
+// Following functions implement the actual commands to the scanner
+
 static uint_fast8_t query_timeout(void) {
   const uint_fast8_t params[] = {0, 0, 1};
   send_command(0x0b, params, NULL);
@@ -187,7 +200,7 @@ static void delete_all_users(gushort *per) {
   }
 }
 
-// Count number of fingerprints?
+// Count number of fingerprints? The manual's translation quality was questionable...
 static uint_fast16_t number_of_users(_Bool count_fingerprints) {
   const uint_fast8_t params[] = {0, 0, count_fingerprints ? 0xff : 0};
   send_command(9, params, 0);
@@ -200,7 +213,7 @@ static uint_fast16_t number_of_users(_Bool count_fingerprints) {
   case fail:
     fp_warn("Finding number of users failed");
   default:
-    // Reasonable assumption: not that many users registered in sensor
+    // Reasonable assumption: not that many users will be registered in sensor
     return UINT_FAST16_MAX;
   }
 }
@@ -467,6 +480,7 @@ G_DECLARE_FINAL_TYPE(FpiDeviceRaspy, fpi_device_raspy, FPI, DEVICE_RASPY,
                      FpImageDevice)
 G_DEFINE_TYPE(FpiDeviceRaspy, fpi_device_raspy, FP_TYPE_IMAGE_DEVICE)
 
+// Close the fingerprint scanner, free heap-allocated resources
 static void raspy_close(FpImageDevice *dev) {
   close(fd);
   FpiDeviceRaspy *self = FPI_DEVICE_RASPY(dev);
@@ -478,6 +492,7 @@ static void raspy_close(FpImageDevice *dev) {
   fpi_image_device_close_complete(dev, err);
 }
 
+// Opens the fingerprint scanner for functioning
 static void raspy_open(FpImageDevice *dev) {
   get_fd_for_usb_serial();
   struct termios term_attributes;
@@ -499,24 +514,22 @@ static void raspy_open(FpImageDevice *dev) {
   fpi_image_device_open_complete(dev, err);
 }
 
+// Stubs not needed, it turns out
+/*
 static void raspy_activate(FpImageDevice *dev) {}
 
 static void raspy_deactivate(FpImageDevice *dev) {}
 
-static void raspy_change_state(FpImageDevice *dev, FpiImageDeviceState state) {}
+static void raspy_change_state(FpImageDevice *dev, FpiImageDeviceState state) {}*/
 
 // Product and vendor ID of bridge controller
 static const FpIdEntry id_tab[] = {
     {.vid = 0x10c4, .pid = 0xea60},
 };
 
-/*const struct _something {
-  _Bool sends_variable_bytes;
-  uint_fast8_t command_id;
-  void (*func)();
-} list_of_funcs[] = {
-    {.func = delete_user, .sends_variable_bytes = 0, .command_id = 4}};*/
-
+/* Pseudo-RAII functions for the FpImageDeviceClass object.
+For now, they are stubs, as most of the initialization 
+occurs in fpi_device_raspy_class_init() */
 static void fpi_device_raspy_init(FpiDeviceRaspy *self) {
   fp_dbg("Raspy initialized");
 }
@@ -544,9 +557,9 @@ static void fpi_device_raspy_class_init(FpiDeviceRaspyClass *klass) {
   // img_class->bz3_threshold = 24;
   img_class->img_height = img_class->img_width = 280;
   img_class->img_open = raspy_open;
-  img_class->activate = raspy_activate;
-  img_class->deactivate = raspy_deactivate;
-  img_class->change_state = raspy_change_state;
+  //img_class->activate = raspy_activate;
+  //img_class->deactivate = raspy_deactivate;
+  //img_class->change_state = raspy_change_state;
   img_class->img_close = raspy_close;
 }
 
